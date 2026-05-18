@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Snake</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{
+  background:#1a1a2e;
+  display:flex;align-items:center;justify-content:center;
+  font-family:monospace;color:#eee;
+  touch-action:none;-webkit-tap-highlight-color:transparent;
+  -webkit-user-select:none;user-select:none;
+}
+#wrap{
+  display:flex;align-items:center;gap:20px;
+  max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);
+}
+canvas{
+  border:2px solid #444;border-radius:6px;background:#0f0f1a;
+  max-width:min(440px,calc(100vw - 160px));max-height:min(440px,calc(100vh - 80px));
+  width:100%;height:auto;
+}
+.info{text-align:center;font-size:16px;margin-top:8px;color:#ccc}
+.info b{color:#4ade80}
+.overlay{
+  position:absolute;display:flex;flex-direction:column;
+  align-items:center;gap:8px;font-size:22px;
+  pointer-events:none;text-shadow:0 0 8px rgba(0,0,0,.7);
+}
+
+/* D-pad */
+#dpad{display:grid;grid-template-areas:
+  ". up ."
+  "left ctr right"
+  ". dwn .";gap:6px;justify-items:center}
+.dbtn{
+  width:62px;height:62px;border-radius:14px;border:2px solid #555;
+  background:rgba(255,255,255,.08);color:#fff;font-size:24px;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  transition:background .1s,transform .05s;
+  touch-action:manipulation;-webkit-tap-highlight-color:transparent;
+}
+.dbtn:active,.dbtn.pressed{background:rgba(74,222,128,.35);transform:scale(.92);border-color:#4ade80}
+#dpad-up{grid-area:up}
+#dpad-left{grid-area:left}
+#dpad-ctr{grid-area:ctr;width:52px;height:52px;font-size:14px;border-color:#888}
+#dpad-right{grid-area:right}
+#dpad-dwn{grid-area:dwn}
+
+@media(max-width:520px){
+  body{flex-direction:column}
+  #wrap{flex-direction:column}
+  canvas{max-width:min(320px,calc(100vw - 32px));max-height:min(320px,calc(100vh - 260px))}
+  #dpad{margin-top:8px}
+  .dbtn{width:56px;height:56px}
+}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div style="display:flex;flex-direction:column;align-items:center">
+    <div style="position:relative;display:inline-block">
+      <canvas id="game" width="440" height="440"></canvas>
+      <div id="overlay" class="overlay" style="top:50%;left:50%;transform:translate(-50%,-50%)"></div>
+    </div>
+    <div class="info">Score: <b id="score">0</b> &nbsp;|&nbsp; <b>Space</b> 开始/暂停</div>
+  </div>
+
+  <div id="dpad">
+    <button class="dbtn" id="dpad-up">▲</button>
+    <button class="dbtn" id="dpad-left">◀</button>
+    <button class="dbtn" id="dpad-ctr" id="startBtn">开始</button>
+    <button class="dbtn" id="dpad-right">▶</button>
+    <button class="dbtn" id="dpad-dwn">▼</button>
+  </div>
+</div>
+
+<script>
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d'),
+      scoreEl=document.getElementById('score'),overlay=document.getElementById('overlay');
+const G=22,CELL=20,SPEED=110;
+let snake,dir,nextDir,food,score,running,over,gameInterval;
+
+function init(){
+  snake=[{x:10,y:10}]; dir=nextDir={x:1,y:0};
+  placeFood(); score=0; running=false; over=false;
+  scoreEl.textContent=0; draw(); showOverlay('');
+}
+function placeFood(){
+  do{ food={x:Math.floor(Math.random()*G),y:Math.floor(Math.random()*G)}; }
+  while(snake.some(s=>s.x===food.x&&s.y===food.y));
+}
+function showOverlay(msg){ overlay.textContent=msg; }
+
+function draw(){
+  ctx.fillStyle='#0f0f1a'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle='#1e1e2e';
+  for(let i=0;i<=G;i++){
+    ctx.beginPath();ctx.moveTo(i*CELL,0);ctx.lineTo(i*CELL,canvas.height);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,i*CELL);ctx.lineTo(canvas.width,i*CELL);ctx.stroke();
+  }
+  ctx.fillStyle='#f87171';ctx.shadowColor='#f87171';ctx.shadowBlur=8;
+  ctx.beginPath();
+  ctx.arc(food.x*CELL+CELL/2,food.y*CELL+CELL/2,CELL/2-2,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;
+  snake.forEach((s,i)=>{
+    const head=i===0;
+    ctx.fillStyle=head?'#86efac':'#4ade80';
+    ctx.shadowColor=head?'#86efac':'#4ade80';ctx.shadowBlur=head?6:0;
+    ctx.beginPath();
+    ctx.roundRect(s.x*CELL+1,s.y*CELL+1,CELL-2,CELL-2,4);ctx.fill();
+    if(head){
+      ctx.shadowBlur=0;ctx.fillStyle='#0f0f1a';
+      const ox=dir.x===1?13:dir.x===-1?4:8;
+      const oy=dir.y===1?13:dir.y===-1?4:8;
+      ctx.fillRect(s.x*CELL+ox,s.y*CELL+oy,3,3);
+      ctx.fillRect(s.x*CELL+ox+(dir.y!==0?3:0),s.y*CELL+oy+(dir.x!==0?3:0),3,3);
+    }
+  });
+  ctx.shadowBlur=0;
+}
+
+function step(){
+  if(!running||over)return;
+  dir=nextDir;
+  const head={x:snake[0].x+dir.x,y:snake[0].y+dir.y};
+  if(head.x<0||head.x>=G||head.y<0||head.y>=G||snake.some(s=>s.x===head.x&&s.y===head.y)){
+    over=true;running=false;showOverlay('Game Over!');return;
+  }
+  snake.unshift(head);
+  if(head.x===food.x&&head.y===food.y){ score+=10;scoreEl.textContent=score;placeFood(); }
+  else{snake.pop();}
+  draw();
+}
+
+function startGame(){
+  if(over){init();running=true}
+  else if(!running){running=true;showOverlay('')}
+  else{running=false;showOverlay('暂停')}
+}
+
+function turn(dx,dy){
+  if(!running)return;
+  if(dx===0&&dy===-1&&dir.y!==1)nextDir={x:0,y:-1};
+  if(dx===0&&dy===1&&dir.y!==-1)nextDir={x:0,y:1};
+  if(dx===-1&&dy===0&&dir.x!==1)nextDir={x:-1,y:0};
+  if(dx===1&&dy===0&&dir.x!==-1)nextDir={x:1,y:0};
+}
+
+// Keyboard
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'){e.preventDefault();startGame()}
+  if(running){
+    if(e.code==='ArrowUp'){e.preventDefault();turn(0,-1)}
+    if(e.code==='ArrowDown'){e.preventDefault();turn(0,1)}
+    if(e.code==='ArrowLeft'){e.preventDefault();turn(-1,0)}
+    if(e.code==='ArrowRight'){e.preventDefault();turn(1,0)}
+  }
+});
+
+// Touch click on canvas also starts
+canvas.addEventListener('click',startGame);
+canvas.addEventListener('touchstart',e=>{e.preventDefault();startGame()},{passive:false});
+
+// Swipe on canvas
+let tx0,ty0;
+canvas.addEventListener('touchstart',e=>{
+  tx0=e.touches[0].clientX;ty0=e.touches[0].clientY;
+},{passive:false});
+canvas.addEventListener('touchend',e=>{
+  if(!running||over)return;
+  const dx=e.changedTouches[0].clientX-tx0,dy=e.changedTouches[0].clientY-ty0;
+  if(Math.abs(dx)<20&&Math.abs(dy)<20)return;
+  turn(dx>Math.abs(dy)?1:dx<-Math.abs(dy)?-1:0, dy>Math.abs(dx)?1:dy<-Math.abs(dx)?-1:0);
+},{passive:false});
+
+// D-pad buttons
+function setupBtn(id,dx,dy){
+  const btn=document.getElementById(id);
+  btn.addEventListener('touchstart',e=>{e.preventDefault();btn.classList.add('pressed');startGame();turn(dx,dy)},{passive:false});
+  btn.addEventListener('touchend',e=>{e.preventDefault();btn.classList.remove('pressed')},{passive:false});
+  btn.addEventListener('mousedown',()=>{btn.classList.add('pressed');startGame();turn(dx,dy)});
+  btn.addEventListener('mouseup',()=>btn.classList.remove('pressed'));
+  btn.addEventListener('mouseleave',()=>btn.classList.remove('pressed'));
+}
+setupBtn('dpad-up',0,-1);
+setupBtn('dpad-dwn',0,1);
+setupBtn('dpad-left',-1,0);
+setupBtn('dpad-right',1,0);
+
+gameInterval=setInterval(step,SPEED);init();
+</script>
+</body>
+</html>
