@@ -179,9 +179,9 @@ canvas.addEventListener('touchend',e=>{
 // D-pad buttons
 function setupBtn(id,dx,dy){
   const btn=document.getElementById(id);
-  btn.addEventListener('touchstart',e=>{e.preventDefault();btn.classList.add('pressed');startGame();turn(dx,dy)},{passive:false});
-  btn.addEventListener('touchend',e=>{e.preventDefault();btn.classList.remove('pressed')},{passive:false});
-  btn.addEventListener('mousedown',()=>{btn.classList.add('pressed');startGame();turn(dx,dy)});
+  btn.addEventListener('touchstart',e=>{e.preventDefault();btn.classList.add('pressed')},{passive:false});
+  btn.addEventListener('touchend',e=>{e.preventDefault();btn.classList.remove('pressed');if(!running)startGame();else turn(dx,dy)},{passive:false});
+  btn.addEventListener('mousedown',()=>{btn.classList.add('pressed');if(!running)startGame();else turn(dx,dy)});
   btn.addEventListener('mouseup',()=>btn.classList.remove('pressed'));
   btn.addEventListener('mouseleave',()=>btn.classList.remove('pressed'));
 }
